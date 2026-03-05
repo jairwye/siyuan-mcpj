@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { ListToolsRequestSchema, CallToolRequestSchema } from "@modelcontextprotocol/sdk/types";
+import { ListToolsRequestSchema, CallToolRequestSchema } from "@modelcontextprotocol/sdk";
 import { allTools, callTool } from "./tools/index.js";
 
 const server = new Server(
