@@ -210,7 +210,87 @@ uvx mcpo --port 8000 --config /path/to/mcp_config.json
 uvx mcpo --config /path/to/bridge-config.json --port 8001
 ```
 
-保持该进程运行（或使用 systemd / launchd / pm2 等做成常驻服务）。此时宿主机在 `http://0.0.0.0:8001` 暴露「仅含 siyuan-mcpj」的 MCP HTTP 端点。
+此时宿主机在 `http://0.0.0.0:8001` 暴露「仅含 siyuan-mcpj」的 MCP HTTP 端点。若希望该进程**常驻**（关终端不退出、开机自启、崩溃自动重启），可采用下面任一方式。
+
+**宿主机常驻运行 uvx mcpo（三种方式）**
+
+- **方式 2a：简单后台（适合临时或单用户）**  
+  使用 `nohup` 或 `&` 让进程在关掉终端后仍运行，日志写入文件；重启系统后需手动再执行。
+  ```bash
+  nohup uvx mcpo --config /path/to/bridge-config.json --port 8001 >> /tmp/mcpo-bridge.log 2>&1 &
+  ```
+  查看是否在跑：`pgrep -af mcpo`；停止：`pkill -f "uvx mcpo"`（或记下 PID 后 `kill <PID>`）。
+
+- **方式 2b：systemd（Linux 推荐，开机自启 + 崩溃重启）**  
+  以 Linux 为例，创建用户级 service（无需 root）。将下面 `YOUR_USER` 换成当前用户名，`/path/to/bridge-config.json` 换成实际绝对路径；若 `uvx` 不在 systemd 的 PATH 里，可把 `ExecStart` 改为 `ExecStart=/home/YOUR_USER/.local/bin/uvx mcpo ...`（先执行 `which uvx` 得到路径）。
+  ```ini
+  # 创建 ~/.config/systemd/user/mcpo-bridge.service
+  [Unit]
+  Description=mcpo bridge for siyuan-mcpj
+  After=network.target
+
+  [Service]
+  Type=simple
+  ExecStart=uvx mcpo --config /path/to/bridge-config.json --port 8001
+  Restart=on-failure
+  RestartSec=5
+
+  [Install]
+  WantedBy=default.target
+  ```
+  启用并启动（用户级 systemd）：
+  ```bash
+  systemctl --user daemon-reload
+  systemctl --user enable mcpo-bridge
+  systemctl --user start mcpo-bridge
+  systemctl --user status mcpo-bridge
+  ```
+  开机后会自动启动。查看日志：`journalctl --user -u mcpo-bridge -f`。
+
+- **方式 2c：launchd（macOS 推荐，开机自启 + 崩溃重启）**  
+  在 macOS 上可用 launchd 管理。将下面 `YOUR_USER` 换成当前用户名，`/path/to/bridge-config.json` 换成实际绝对路径；`uvx` 的路径可用 `which uvx` 得到（例如 `/Users/YOUR_USER/.local/bin/uvx`）。
+  ```xml
+  <!-- 创建 ~/Library/LaunchAgents/com.mcpo.bridge.plist -->
+  <?xml version="1.0" encoding="UTF-8"?>
+  <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+  <plist version="1.0">
+  <dict>
+    <key>Label</key>
+    <string>com.mcpo.bridge</string>
+    <key>ProgramArguments</key>
+    <array>
+      <string>/Users/YOUR_USER/.local/bin/uvx</string>
+      <string>mcpo</string>
+      <string>--config</string>
+      <string>/path/to/bridge-config.json</string>
+      <string>--port</string>
+      <string>8001</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/tmp/mcpo-bridge.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/mcpo-bridge.err.log</string>
+  </dict>
+  </plist>
+  ```
+  加载与启动：
+  ```bash
+  launchctl load ~/Library/LaunchAgents/com.mcpo.bridge.plist
+  launchctl start com.mcpo.bridge
+  ```
+  取消常驻：`launchctl unload ~/Library/LaunchAgents/com.mcpo.bridge.plist`。日志在 `/tmp/mcpo-bridge.log` 和 `/tmp/mcpo-bridge.err.log`。
+
+- **方式 2d：pm2（跨平台，可选）**  
+  若已安装 Node 和 pm2（`npm i -g pm2`），可用 pm2 托管，便于查看日志与重启：
+  ```bash
+  pm2 start "uvx mcpo --config /path/to/bridge-config.json --port 8001" --name mcpo-bridge
+  pm2 save && pm2 startup   # 可选：开机自启
+  ```
+  查看状态与日志：`pm2 status`、`pm2 logs mcpo-bridge`；停止：`pm2 stop mcpo-bridge`。
 
 **步骤 3：在「容器内 mcpo」的配置里用 URL 连宿主机**
 
