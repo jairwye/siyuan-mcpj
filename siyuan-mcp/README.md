@@ -98,9 +98,9 @@ docker run -d \
 
 ### 提供给 mcpo 的配置（供 Open WebUI 使用）
 
-mcpo 会把 MCP 作为**子进程**启动，并通过 HTTP 暴露给 Open WebUI。需要你在 mcpo 的配置里写明如何启动本 MCP（以下二选一）。
+mcpo 会把 MCP 作为**子进程**启动，并通过 HTTP 暴露给 Open WebUI。需要你在 mcpo 的配置里写明如何启动本 MCP（以下方式一、二、三择一）。
 
-**若 mcpo 与 siyuan-mcpj 在同一台机器运行**，直接采用下面的 **方式二**：在 mcpo 配置里用 `command: "docker"` 指向本机上的 siyuan-mcpj 镜像即可，无需 URL 方式。
+**若 mcpo 与 siyuan-mcpj 在同一台机器、且 mcpo 跑在宿主机**，可采用 **方式一** 或 **方式二**（推荐方式二：`command: "docker"` 指向本机 siyuan-mcpj 镜像）。**若 mcpo 跑在 Docker 容器内、且容器里没有 docker**，采用下面的 **方式三：宿主机 mcpo 桥接**。
 
 **方式一：本机用 Node 运行 MCP（适合 mcpo 与 MCP 在同一台机、且该机已构建好本项目）**
 
@@ -150,6 +150,92 @@ uvx mcpo --port 8000 --config /path/to/mcp_config.json
   }
 }
 ```
+
+**方式三：宿主机 mcpo 桥接（mcpo 在 Docker 内、容器里没有 docker 时）**
+
+适用于：**mcpo 跑在 Docker 里**（例如与 Open WebUI 同一 compose），镜像内没有 Docker CLI，无法在配置里写 `command: "docker"` 启动 siyuan-mcpj。做法是：在**宿主机**上单独跑一个 mcpo，只负责 siyuan-mcpj，并暴露 HTTP；**容器内的 mcpo** 用 `type: "streamable-http"` + `url` 连宿主机，从而间接使用 siyuan-mcpj。
+
+**步骤 1：在宿主机上准备「桥接用」mcpo 配置**
+
+在宿主机任意目录（例如 `~/mcpo-bridge`）新建 `bridge-config.json`，内容二选一（宿主机有 Node 且已构建本项目时用 A，否则用 B）。
+
+**A. 宿主机用 Node 运行 siyuan-mcpj**
+
+将 `/绝对路径/siyuan-mcp` 换成你本机克隆的 siyuan-mcp 目录的**绝对路径**（需已执行 `npm install && npm run build`）：
+
+```json
+{
+  "mcpServers": {
+    "siyuan-mcpj": {
+      "command": "node",
+      "args": ["/绝对路径/siyuan-mcp/dist/index.js"],
+      "env": {
+        "SIYUAN_HOST": "<思源在内网的可访问地址，本机思源填 127.0.0.1>",
+        "SIYUAN_PORT": "6806",
+        "SIYUAN_TOKEN": "<你的思源API令牌>"
+      }
+    }
+  }
+}
+```
+
+**B. 宿主机用 Docker 运行 siyuan-mcpj**
+
+宿主机需已安装 Docker 并能访问思源（若思源也在本机，`SIYUAN_HOST` 可用 `host.docker.internal` 或宿主机内网 IP）：
+
+```json
+{
+  "mcpServers": {
+    "siyuan-mcpj": {
+      "command": "docker",
+      "args": [
+        "run",
+        "--rm",
+        "-i",
+        "-e", "SIYUAN_HOST=<思源在内网的可访问地址>",
+        "-e", "SIYUAN_PORT=6806",
+        "-e", "SIYUAN_TOKEN=<你的思源API令牌>",
+        "ghcr.io/jairwye/siyuan-mcpj:latest"
+      ]
+    }
+  }
+}
+```
+
+**步骤 2：在宿主机上启动桥接 mcpo**
+
+在宿主机执行（端口 `8001` 可改，需与步骤 3 中 `url` 一致）：
+
+```bash
+uvx mcpo --config /path/to/bridge-config.json --port 8001
+```
+
+保持该进程运行（或使用 systemd / launchd / pm2 等做成常驻服务）。此时宿主机在 `http://0.0.0.0:8001` 暴露「仅含 siyuan-mcpj」的 MCP HTTP 端点。
+
+**步骤 3：在「容器内 mcpo」的配置里用 URL 连宿主机**
+
+在你**跑 mcpo 的 Docker 容器**所挂载的 MCP 配置中，**不要**再写 `command: "docker"`，改为增加一条 streamable-http 配置，指向宿主机：
+
+- **Mac 或 Windows（Docker Desktop）**：容器内可通过 `host.docker.internal` 访问宿主机。
+  ```json
+  "siyuan-mcpj": {
+    "type": "streamable-http",
+    "url": "http://host.docker.internal:8001"
+  }
+  ```
+- **Linux**：容器内通常没有 `host.docker.internal`，需填**宿主机在内网的 IP**（如 `192.168.x.x`），或宿主机上做端口映射并在配置里写该地址。
+  ```json
+  "siyuan-mcpj": {
+    "type": "streamable-http",
+    "url": "http://<宿主机局域网IP>:8001"
+  }
+  ```
+
+将上述 `siyuan-mcpj` 块合并进容器内 mcpo 使用的完整 `mcpServers` 对象中，重启或重载容器内 mcpo。Open WebUI 仍只连**容器内 mcpo** 的地址（如 `http://<mcpo容器所在机>:8000`），即可使用包括 siyuan-mcpj 在内的所有已配置 MCP。
+
+**小结**：宿主机 mcpo（端口 8001）只负责 siyuan-mcpj；容器内 mcpo 通过 URL 访问宿主机 8001，无需在容器里安装 Docker 或 Node。
+
+---
 
 **Open WebUI 端需要写的配置：**
 
