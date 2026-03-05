@@ -1,11 +1,10 @@
-# Build stage
+# Build stage (copy all before npm install: "prepare" runs build after install)
 FROM node:20-alpine AS builder
 WORKDIR /app
 COPY package.json ./
-RUN npm install
 COPY tsconfig.json ./
 COPY src ./src
-RUN npm run build
+RUN npm install
 RUN npm prune --production
 
 # Run stage (no npm needed: copy from builder)
