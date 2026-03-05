@@ -1,8 +1,10 @@
 # 在 push 到 main 时构建 Docker 镜像并推送到 GitHub Container Registry (ghcr.io)
+# 也可在 Actions 页手动运行：Docker build and push to GHCR → Run workflow
 name: Docker build and push to GHCR
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 jobs:
   docker:
     runs-on: ubuntu-latest
