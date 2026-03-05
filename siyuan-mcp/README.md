@@ -82,7 +82,9 @@ docker run -d \
    ```
    会从 registry 拉取镜像并启动，无需 `git clone` 或本地构建。
 
-4. 查看运行状态：
+   **说明**：本镜像是 **stdio MCP**，通过标准输入/输出与调用方通信。用 `docker compose up -d` 时容器在后台没有 stdin，进程可能启动后很快退出，属正常。**实际使用时**应由 **mcpo** 或 **Cursor** 在需要时用 `docker run -i ... 镜像` 启动容器（见下方「提供给 mcpo」「提供给 Cursor」），无需常驻运行一个 compose 容器。
+
+4. 查看运行状态（若容器已退出，可忽略；用 mcpo/Cursor 时由它们按需起容器）：
    ```bash
    docker compose ps
    docker compose logs -f siyuan-mcpj   # 若有问题可看日志
