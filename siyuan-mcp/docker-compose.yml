@@ -1,7 +1,6 @@
 # 使用镜像地址运行，无需克隆仓库或本地构建
 # 镜像名与仓库 siyuan-mcpj 对应（GHCR: ghcr.io/jairwye/siyuan-mcpj）
 # 环境变量：从同目录 .env 或运行前 export 传入；SIYUAN_TOKEN 必填，SIYUAN_HOST/PORT 有默认值
-version: "3.9"
 services:
   siyuan-mcpj:
     image: ghcr.io/jairwye/siyuan-mcpj:latest
