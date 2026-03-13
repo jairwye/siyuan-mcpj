@@ -1,10 +1,7 @@
-# 使用镜像地址运行，无需克隆仓库或本地构建
-# 镜像名与仓库 siyuan-mcpj 对应（GHCR: ghcr.io/jairwye/siyuan-mcpj）
-# 环境变量：从同目录 .env 或运行前 export 传入；SIYUAN_TOKEN 必填，SIYUAN_HOST/PORT 有默认值
-#
-# 注意：本镜像是 stdio MCP，需通过 stdin/stdout 与调用方通信。用 compose up -d 时容器无 stdin，
-# 进程会立即退出。因此不要用 compose 做常驻运行；应由 mcpo 或 Cursor 在需要时用
-# docker run -i -e SIYUAN_* ... 镜像 按需启动。restart 设为 no 避免无意义的重启循环。
+# 说明：
+# 1) 本文件仅用于“镜像与环境变量示例”，不是推荐的常驻运行方式。
+# 2) siyuan-mcpj 是 stdio MCP，推荐由 mcpo/Cursor 通过 docker run -i 按需拉起。
+# 3) 若直接 compose up -d，这个容器通常不会作为长期服务存在，因此 restart 使用 no。
 services:
   siyuan-mcpj:
     image: ghcr.io/jairwye/siyuan-mcpj:latest

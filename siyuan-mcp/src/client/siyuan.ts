@@ -6,6 +6,7 @@ import type { SiYuanResponse } from "../types.js";
 
 const DEFAULT_HOST = "127.0.0.1";
 const DEFAULT_PORT = "6806";
+const DEFAULT_TIMEOUT_MS = 15000;
 
 function getBaseUrl(): string {
   const host = process.env.SIYUAN_HOST ?? DEFAULT_HOST;
@@ -21,6 +22,29 @@ function getToken(): string {
   return token;
 }
 
+function getTimeoutMs(): number {
+  const raw = process.env.SIYUAN_TIMEOUT_MS;
+  if (!raw) return DEFAULT_TIMEOUT_MS;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return DEFAULT_TIMEOUT_MS;
+  return Math.floor(n);
+}
+
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = getTimeoutMs()): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (e) {
+    if (e instanceof Error && e.name === "AbortError") {
+      throw new Error(`思源请求超时（${timeoutMs}ms）: ${url}`);
+    }
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function request<T>(path: string, body?: object): Promise<T> {
   const base = getBaseUrl();
   const token = getToken();
@@ -32,13 +56,13 @@ async function request<T>(path: string, body?: object): Promise<T> {
   try {
     if (body !== undefined) {
       headers["Content-Type"] = "application/json";
-      res = await fetch(url, {
+      res = await fetchWithTimeout(url, {
         method: "POST",
         headers,
         body: JSON.stringify(body),
       });
     } else {
-      res = await fetch(url, { method: "POST", headers });
+      res = await fetchWithTimeout(url, { method: "POST", headers });
     }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -69,7 +93,7 @@ async function requestMultipart<T>(path: string, form: FormData): Promise<T> {
   };
   let res: Response;
   try {
-    res = await fetch(url, {
+    res = await fetchWithTimeout(url, {
       method: "POST",
       headers,
       body: form,
@@ -224,11 +248,30 @@ export async function flushTransaction() {
 export async function getFile(path: string): Promise<ArrayBuffer> {
   const base = getBaseUrl();
   const token = getToken();
-  const res = await fetch(`${base}/api/file/getFile`, {
-    method: "POST",
-    headers: { Authorization: `Token ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ path }),
-  });
+  let res: Response;
+  try {
+    res = await fetchWithTimeout(`${base}/api/file/getFile`, {
+      method: "POST",
+      headers: { Authorization: `Token ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ path }),
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    throw new Error(`getFile 连接失败: ${msg}`);
+  }
+
+  // SiYuan getFile returns HTTP 202 with JSON error body in failure cases.
+  if (res.status === 202) {
+    const t = await res.text();
+    try {
+      const j = JSON.parse(t) as { code?: number; msg?: string };
+      const msg = j.msg ? `${j.msg}` : t;
+      throw new Error(`getFile 失败: code=${j.code ?? "unknown"} ${msg}`);
+    } catch {
+      throw new Error(`getFile 失败: HTTP 202 ${t}`);
+    }
+  }
+
   if (!res.ok) {
     const t = await res.text();
     let msg = t;
