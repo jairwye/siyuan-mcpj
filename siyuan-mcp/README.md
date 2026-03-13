@@ -252,6 +252,28 @@ chmod +x ~/.mcpo/start-internal.sh ~/.mcpo/start-external.sh
 
 `~/Library/LaunchAgents/com.mcpo.external.plist`（可选，内容同上，把 label/脚本/日志名改为 external）。
 
+external 完整示例：
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.mcpo.external</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>-lc</string>
+    <string>~/.mcpo/start-external.sh</string>
+  </array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>/tmp/mcpo-external.log</string>
+  <key>StandardErrorPath</key><string>/tmp/mcpo-external.err.log</string>
+</dict>
+</plist>
+```
+
 也可以直接用命令创建（避免手工编辑）：
 
 ```bash
@@ -268,6 +290,30 @@ cat > ~/Library/LaunchAgents/com.mcpo.internal.plist <<'EOF'
   <key>KeepAlive</key><true/>
   <key>StandardOutPath</key><string>/tmp/mcpo-internal.log</string>
   <key>StandardErrorPath</key><string>/tmp/mcpo-internal.err.log</string>
+</dict>
+</plist>
+EOF
+```
+
+external 命令式创建：
+
+```bash
+cat > ~/Library/LaunchAgents/com.mcpo.external.plist <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.mcpo.external</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>-lc</string>
+    <string>~/.mcpo/start-external.sh</string>
+  </array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>/tmp/mcpo-external.log</string>
+  <key>StandardErrorPath</key><string>/tmp/mcpo-external.err.log</string>
 </dict>
 </plist>
 EOF
