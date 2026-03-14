@@ -1,7 +1,7 @@
 # 思源笔记 MCP 服务器 / SiYuan MCP Server
 
 基于 [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) 的思源笔记 MCP 服务器。  
-推荐通过 **mcpo 宿主机双实例（internal / external）** 接入 Open WebUI。
+推荐通过 **mcpo internal 单实例（默认最小暴露面）** 接入 Open WebUI。
 
 [English](#english) | [中文](#中文)
 
@@ -13,10 +13,10 @@
 
 推荐主线：
 
-`Open WebUI -> mcpo-internal / mcpo-external(宿主机) -> siyuan-mcpj(stdio) -> SiYuan API`
+`Open WebUI -> mcpo-internal(宿主机) -> siyuan-mcpj(stdio) -> SiYuan API`
 
 - `internal`：`siyuan-mcpj` + 可选内网工具（`memory` / `time` / `sequential-thinking`）
-- `external`：可选联网工具（如 `exa`，默认注释）
+- `external`：默认禁用；仅在明确需要联网能力时再启用（如 `exa`）
 
 ## 2. 先说结论（最关键）
 
@@ -48,11 +48,11 @@ mkdir -p ~/.mcpo
 cat > ~/.mcpo/.env <<'EOF'
 # internal
 MCPO_INTERNAL_PORT=8100
-MCPO_INTERNAL_API_KEY=change-this-internal-key
+MCPO_INTERNAL_API_KEY=replace-with-a-long-random-key
 
-# external
-MCPO_EXTERNAL_PORT=8200
-MCPO_EXTERNAL_API_KEY=change-this-external-key
+# external (disabled by default)
+# MCPO_EXTERNAL_PORT=8200
+# MCPO_EXTERNAL_API_KEY=replace-with-a-long-random-key
 
 # siyuan
 SIYUAN_HOST=127.0.0.1
@@ -61,7 +61,7 @@ SIYUAN_TOKEN=replace-with-your-siyuan-token
 SIYUAN_TIMEOUT_MS=15000
 
 # external optional
-EXA_API_KEY=replace-with-your-exa-key
+# EXA_API_KEY=replace-with-your-exa-key
 EOF
 ```
 
@@ -69,6 +69,7 @@ EOF
 
 - 当前主流程里，`siyuan-mcpj` 的 `SIYUAN_*` 通常直接写在 `mcp-internal.json` 的命令参数或 `env` 字段中即可。
 - 因此 `env.example` 不是运行必需项，只是变量参考模板，便于你统一管理。
+- `external` 默认建议保持禁用，避免无必要的外网访问面。
 
 ## 5. `siyuan-mcpj` 两种运行方式
 
@@ -91,7 +92,7 @@ npm run build
 
 `<your-local-path>/siyuan-mcp/dist/index.js`
 
-## 6. mcpo 配置（internal / external）
+## 6. mcpo 配置（默认 internal，external 可选）
 
 ### 6.1 internal（`~/.mcpo/mcp-internal.json`）
 
@@ -162,7 +163,22 @@ Node 方案（把路径改成你本机路径）：
 }
 ```
 
+### 6.3 最小权限原则（推荐）
+
+- 默认只启用 `siyuan-mcpj`；`memory/time/sequential-thinking/exa` 按需逐个启用。
+- 需要联网检索时再临时启用 `external`，完成后立即停用。
+- 与 LLM 交互时，优先用“限定范围”提示词，避免全库扫描（例如：限定笔记本、文档路径、时间范围）。
+- 避免在会话里直接粘贴明文密钥、账号、私密内容；先脱敏再提问。
+
 ## 7. 宿主机启动 mcpo（必须）
+
+### 7.0 安全基线（建议先做）
+
+先生成高强度 API key（internal 必需，external 仅启用时再生成）：
+
+```bash
+openssl rand -hex 32
+```
 
 先加载环境变量：
 
@@ -174,7 +190,7 @@ set -a; source ~/.mcpo/.env; set +a
 
 ```bash
 uvx mcpo \
-  --host 0.0.0.0 \
+  --host 127.0.0.1 \
   --port "${MCPO_INTERNAL_PORT}" \
   --api-key "${MCPO_INTERNAL_API_KEY}" \
   --config ~/.mcpo/mcp-internal.json
@@ -184,7 +200,7 @@ uvx mcpo \
 
 ```bash
 uvx mcpo \
-  --host 0.0.0.0 \
+  --host 127.0.0.1 \
   --port "${MCPO_EXTERNAL_PORT}" \
   --api-key "${MCPO_EXTERNAL_API_KEY}" \
   --config ~/.mcpo/mcp-external.json
@@ -205,7 +221,7 @@ uvx mcpo \
 set -euo pipefail
 set -a; source ~/.mcpo/.env; set +a
 exec "$(which uvx)" mcpo \
-  --host 0.0.0.0 \
+  --host 127.0.0.1 \
   --port "${MCPO_INTERNAL_PORT}" \
   --api-key "${MCPO_INTERNAL_API_KEY}" \
   --config ~/.mcpo/mcp-internal.json
@@ -218,7 +234,7 @@ exec "$(which uvx)" mcpo \
 set -euo pipefail
 set -a; source ~/.mcpo/.env; set +a
 exec "$(which uvx)" mcpo \
-  --host 0.0.0.0 \
+  --host 127.0.0.1 \
   --port "${MCPO_EXTERNAL_PORT}" \
   --api-key "${MCPO_EXTERNAL_API_KEY}" \
   --config ~/.mcpo/mcp-external.json
@@ -358,7 +374,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/bin/bash -lc 'set -a; source ~/.mcpo/.env; set +a; "$(which uvx)" mcpo --host 0.0.0.0 --port "${MCPO_INTERNAL_PORT}" --api-key "${MCPO_INTERNAL_API_KEY}" --config ~/.mcpo/mcp-internal.json'
+ExecStart=/bin/bash -lc 'set -a; source ~/.mcpo/.env; set +a; "$(which uvx)" mcpo --host 127.0.0.1 --port "${MCPO_INTERNAL_PORT}" --api-key "${MCPO_INTERNAL_API_KEY}" --config ~/.mcpo/mcp-internal.json'
 Restart=on-failure
 RestartSec=5
 
@@ -386,12 +402,16 @@ pm2 startup
 
 ```bash
 curl -sS "http://127.0.0.1:8100/siyuan-mcpj/docs" >/dev/null && echo "internal ok"
+lsof -nP -iTCP:8100 -sTCP:LISTEN
+LAN_IP="$(ipconfig getifaddr en0 2>/dev/null || true)"; [ -n "$LAN_IP" ] && curl -sS --max-time 2 "http://${LAN_IP}:8100/siyuan-mcpj/docs" || true
 ```
 
 如果启用 external：
 
 ```bash
 curl -sS "http://127.0.0.1:8200/exa/docs" >/dev/null && echo "external ok"
+lsof -nP -iTCP:8200 -sTCP:LISTEN
+LAN_IP="$(ipconfig getifaddr en0 2>/dev/null || true)"; [ -n "$LAN_IP" ] && curl -sS --max-time 2 "http://${LAN_IP}:8200/exa/docs" || true
 ```
 
 ## 8. Open WebUI 接入
@@ -415,7 +435,19 @@ curl -X POST "http://127.0.0.1:6806/api/system/version" \
 ```
 
 2. internal docs：`http://127.0.0.1:8100/siyuan-mcpj/docs`
-3. external docs（启用后）：`http://127.0.0.1:8200/exa/docs`
+3. 端口监听检查：`lsof -nP -iTCP:8100 -sTCP:LISTEN`（确认是 `127.0.0.1`）
+4. external docs（启用后）：`http://127.0.0.1:8200/exa/docs`
+5. 敏感信息自检（按需替换路径）：
+
+```bash
+rg -n "SIYUAN_TOKEN|MCPO_.*API_KEY|EXA_API_KEY" ~/.mcpo /tmp/mcpo*.log /tmp/mcpo*.err.log
+```
+
+6. 密钥轮换后重启服务并复测：
+
+```bash
+launchctl kickstart -k "gui/$(id -u)/com.mcpo.internal"
+```
 
 ## 10. 常见问题
 
@@ -439,7 +471,7 @@ curl -X POST "http://127.0.0.1:6806/api/system/version" \
 
 Recommended path:
 
-`Open WebUI -> host mcpo (internal / external) -> siyuan-mcpj(stdio) -> SiYuan API`
+`Open WebUI -> host mcpo (internal by default) -> siyuan-mcpj(stdio) -> SiYuan API`
 
 Key points:
 

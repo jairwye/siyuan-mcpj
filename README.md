@@ -1,13 +1,13 @@
 # siyuan-mcpj
 
-思源笔记 MCP 服务器：基于 [MCP](https://modelcontextprotocol.io/) 将思源 API 封装为工具集，推荐以 **mcpo 宿主机双实例** 接入 Open WebUI。
+思源笔记 MCP 服务器：基于 [MCP](https://modelcontextprotocol.io/) 将思源 API 封装为工具集，推荐以 **mcpo internal 单实例（最小暴露面）** 接入 Open WebUI。
 
 ## 推荐部署主线
 
-`Open WebUI -> mcpo-internal / mcpo-external(宿主机) -> siyuan-mcpj(stdio) -> SiYuan API`
+`Open WebUI -> mcpo-internal(宿主机) -> siyuan-mcpj(stdio) -> SiYuan API`
 
 - internal：`siyuan-mcpj` + 可选内网工具（memory/time/sequential-thinking）
-- external：可选联网工具（如 exa，默认注释）
+- external：默认禁用，仅在明确需要联网能力时临时启用（如 exa）
 
 ## 文档入口
 
@@ -21,3 +21,4 @@
 - `siyuan-mcpj` 是 stdio MCP，不是常驻 HTTP 服务。
 - 由宿主机 `mcpo` 按需拉起（Node 或 Docker 命令）。
 - 完整启动、构建与排障步骤见主文档。
+- 安全默认建议：只启用 `internal`、`mcpo` 仅监听 `127.0.0.1`、使用高强度 API key。
